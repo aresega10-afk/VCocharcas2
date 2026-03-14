@@ -2,7 +2,7 @@
 "name": "Vcocharcas POS",
 "short_name": "Vcocharcas",
 "description": "Sistema de Punto de Venta para Vcocharcas",
-"start_url": "Index.html",
+"start_url": "index.html",
 "display": "standalone",
 "background_color": "#1e3a8a",
 "theme_color": "#1e3a8a",
