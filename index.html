@@ -10,7 +10,7 @@
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Vcocharcas POS v4.6</title>
+    <title>Vcocharcas POS v4.9</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -18,16 +18,13 @@
         .ticket-font { font-family: 'Courier New', Courier, monospace; line-height: 1.2; }
         .hide-scroll::-webkit-scrollbar { display: none; }
         input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        /* Estilo para que el input invisible no ocupe espacio pero sea detectable */
         #csvFile { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
     </style>
 </head>
 <body class="bg-gray-100 pb-32">
 
-    <!-- Input Oculto (Fuera del main para evitar bloqueos de renderizado) -->
     <input type="file" id="csvFile" accept=".csv, text/csv">
 
-    <!-- Ticket Area -->
     <div id="ticket-impresion" class="hidden p-4 ticket-font text-xs bg-white w-[280px] mx-auto border">
         <div class="text-center mb-1">
             <div class="font-black text-xl uppercase italic">VCOCHARCAS</div>
@@ -49,7 +46,6 @@
         <div class="text-center mt-6 uppercase text-[9px] font-black italic">Gracias por su compra</div>
     </div>
 
-    <!-- Navigation -->
     <nav class="bg-blue-900 text-white p-4 sticky top-0 z-50 shadow-md">
         <div class="flex justify-between items-center max-w-lg mx-auto">
             <h1 class="text-xl font-bold italic tracking-tighter uppercase">Vcocharcas</h1>
@@ -71,6 +67,8 @@
         let db = JSON.parse(localStorage.getItem('vco_db')) || { transacciones: [], productos: [], deudas: [], categorias: ['General', 'Bebidas', 'Abarrotes', 'Limpieza', 'Golosinas'] };
         let carrito = [];
         let filtroCat = 'Todos';
+
+        const escapeHTML = (str) => String(str).replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
 
         const save = () => { localStorage.setItem('vco_db', JSON.stringify(db)); updateNav(); };
         const updateNav = () => {
@@ -96,7 +94,7 @@
         }
 
         function renderInventario() {
-            const catOpts = db.categorias.map(c => `<option value="${c}">${c}</option>`).join('');
+            const catOpts = db.categorias.map(c => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`).join('');
             document.getElementById('app-content').innerHTML = `
                 <div class="bg-white p-5 rounded-2xl shadow mb-4">
                     <h3 class="font-bold text-xs text-gray-400 uppercase mb-3 border-b pb-1">Nuevo Producto</h3>
@@ -109,12 +107,17 @@
                     </div>
                     <button onclick="addP()" class="w-full bg-blue-700 text-white mt-4 p-3 rounded-xl font-bold uppercase shadow">Guardar</button>
                 </div>
-                <div class="space-y-2">
+                
+                <div class="mb-4">
+                    <input type="text" id="search-stock" oninput="filtrarStock()" placeholder="🔍 Buscar producto existente..." class="w-full p-3 border-2 border-blue-200 rounded-xl text-sm font-bold bg-white focus:outline-none focus:border-blue-500 transition-colors">
+                </div>
+
+                <div class="space-y-2" id="lista-inventario">
                     ${db.productos.map((p, i) => `
-                        <div class="bg-white p-3 rounded-xl flex justify-between items-center shadow-sm border-l-4 border-blue-900">
+                        <div class="prod-item bg-white p-3 rounded-xl flex justify-between items-center shadow-sm border-l-4 border-blue-900">
                             <div class="flex-1">
-                                <b class="text-sm uppercase">${p.nombre}</b> 
-                                <span class="text-[9px] bg-gray-100 px-1 rounded text-gray-400">${p.cat || 'Gral'}</span><br>
+                                <b class="text-sm uppercase prod-nombre">${escapeHTML(p.nombre || 'SIN NOMBRE')}</b> 
+                                <span class="text-[9px] bg-gray-100 px-1 rounded text-gray-400">${escapeHTML(p.cat || 'Gral')}</span><br>
                                 <small class="text-gray-400 font-bold">Vta: S/ ${p.precio} | Cost: S/ ${p.costo || 0} | Stock: ${p.stock}</small>
                             </div>
                             <div class="flex gap-2">
@@ -125,6 +128,19 @@
                 </div>`;
         }
 
+        function filtrarStock() {
+            const input = document.getElementById('search-stock');
+            if (!input) return; 
+            const filtro = input.value.toLowerCase();
+            const items = document.querySelectorAll('.prod-item');
+            
+            items.forEach(item => {
+                const elementoNombre = item.querySelector('.prod-nombre');
+                const nombreTexto = elementoNombre ? String(elementoNombre.textContent).toLowerCase() : '';
+                item.style.display = nombreTexto.includes(filtro) ? 'flex' : 'none';
+            });
+        }
+
         function editP(index) {
             const p = db.productos[index];
             const nNombre = prompt("Nombre:", p.nombre);
@@ -132,7 +148,7 @@
             const nCosto = prompt("Costo:", p.costo);
             const nPrecio = prompt("Precio Venta:", p.precio);
             const nStock = prompt("Stock:", p.stock);
-            if (nNombre) p.nombre = nNombre;
+            if (nNombre.trim() !== '') p.nombre = nNombre.trim();
             if (!isNaN(parseFloat(nCosto))) p.costo = parseFloat(nCosto);
             if (!isNaN(parseFloat(nPrecio))) p.precio = parseFloat(nPrecio);
             if (!isNaN(parseInt(nStock))) p.stock = parseInt(nStock);
@@ -141,7 +157,7 @@
         }
 
         function addP() {
-            const n = document.getElementById('p-n').value, 
+            const n = document.getElementById('p-n').value.trim(), 
                   v = parseFloat(document.getElementById('p-v').value), 
                   c = parseFloat(document.getElementById('p-c').value) || 0, 
                   s = parseInt(document.getElementById('p-s').value) || 0, 
@@ -151,9 +167,10 @@
 
         function renderVenta() {
             const cats = ['Todos', ...db.categorias];
-            const catFiltros = cats.map(c => `<button onclick="filtroCat='${c}';renderVenta()" class="px-4 py-2 rounded-full text-[10px] font-bold uppercase whitespace-nowrap ${filtroCat === c ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-500 border'}">${c}</button>`).join('');
+            const catFiltros = cats.map(c => `<button onclick="filtroCat='${escapeHTML(c)}';renderVenta()" class="px-4 py-2 rounded-full text-[10px] font-bold uppercase whitespace-nowrap ${filtroCat === c ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-500 border'}">${escapeHTML(c)}</button>`).join('');
             const prodFiltrados = filtroCat === 'Todos' ? db.productos : db.productos.filter(p => p.cat === filtroCat);
-            const opts = prodFiltrados.map(p => `<option value="${p.nombre}">`).join('');
+            const opts = prodFiltrados.map(p => `<option value="${escapeHTML(p.nombre)}">`).join('');
+            
             document.getElementById('app-content').innerHTML = `
                 <div class="flex gap-2 overflow-x-auto pb-2 hide-scroll">${catFiltros}</div>
                 <div class="bg-white p-5 rounded-3xl shadow-xl space-y-4">
@@ -180,7 +197,11 @@
             upC();
         }
 
-        function aP() { const x = db.productos.find(p => p.nombre === document.getElementById('v-d').value); if (x) document.getElementById('v-p').value = x.precio; }
+        function aP() { 
+            const val = document.getElementById('v-d').value;
+            const x = db.productos.find(p => p.nombre === val); 
+            if (x) document.getElementById('v-p').value = x.precio; 
+        }
         
         function addC() {
             const d = document.getElementById('v-d').value, c = parseInt(document.getElementById('v-c').value), p = parseFloat(document.getElementById('v-p').value);
@@ -191,7 +212,7 @@
 
         function upC() {
             const l = document.getElementById('c-list'); if (!l) return;
-            l.innerHTML = carrito.map((x, i) => `<div class="flex justify-between border-b py-3 items-center"><div><b class="text-blue-900">${x.c}x</b> ${x.d}</div><div class="flex items-center"><b>S/ ${x.st.toFixed(2)}</b><button onclick="carrito.splice(${i},1);upC()" class="ml-3 text-red-300"><i class="fas fa-times-circle"></i></button></div></div>`).join('');
+            l.innerHTML = carrito.map((x, i) => `<div class="flex justify-between border-b py-3 items-center"><div><b class="text-blue-900">${x.c}x</b> ${escapeHTML(x.d)}</div><div class="flex items-center"><b>S/ ${x.st.toFixed(2)}</b><button onclick="carrito.splice(${i},1);upC()" class="ml-3 text-red-300"><i class="fas fa-times-circle"></i></button></div></div>`).join('');
             document.getElementById('c-tot').innerText = 'S/ ' + carrito.reduce((a, b) => a + b.st, 0).toFixed(2);
         }
 
@@ -205,9 +226,9 @@
             if (m === 'Fíado') db.deudas.push({ cli, tel, monto: totV, utilidad: totU, f: new Date().toLocaleDateString(), detalle: carrito.map(x => `${x.c} ${x.d}`).join(', ') });
             document.getElementById('t-fecha').innerText = new Date().toLocaleString();
             document.getElementById('t-tipo-pago').innerText = m.toUpperCase();
-            document.getElementById('t-cliente').innerText = cli;
+            document.getElementById('t-cliente').innerText = escapeHTML(cli);
             document.getElementById('t-total').innerText = totV.toFixed(2);
-            document.getElementById('t-items-print').innerHTML = carrito.map(x => `<tr><td>${x.c}</td><td>${x.d}</td><td class="text-right">${x.st.toFixed(2)}</td></tr>`).join('');
+            document.getElementById('t-items-print').innerHTML = carrito.map(x => `<tr><td>${x.c}</td><td>${escapeHTML(x.d)}</td><td class="text-right">${x.st.toFixed(2)}</td></tr>`).join('');
             save(); window.print();
             carrito = []; renderDashboard();
         }
@@ -221,7 +242,7 @@
                     app.innerHTML += `
                     <div class="bg-white p-5 rounded-2xl border-l-8 border-orange-500 mb-3 shadow">
                         <div class="flex justify-between items-start">
-                            <div><p class="font-black text-blue-900 uppercase text-sm">${d.cli}</p><small class="text-gray-400 font-bold">${d.f}</small><p class="text-[10px] text-gray-500 italic mt-1">${d.detalle}</p></div>
+                            <div><p class="font-black text-blue-900 uppercase text-sm">${escapeHTML(d.cli)}</p><small class="text-gray-400 font-bold">${d.f}</small><p class="text-[10px] text-gray-500 italic mt-1">${escapeHTML(d.detalle)}</p></div>
                             <div class="text-right"><p class="text-xl font-black text-orange-600 leading-none">S/ ${d.monto.toFixed(2)}</p></div>
                         </div>
                         <div class="flex gap-2 mt-4">
@@ -253,10 +274,14 @@
 
                     <div class="bg-white p-6 rounded-3xl shadow-lg">
                         <h3 class="font-black border-b pb-2 uppercase text-[10px] text-blue-900 mb-4">Cargar Stock (CSV)</h3>
-                        <p class="text-[9px] text-gray-400 mb-3 font-bold">Instrucciones:</p>
+                        <p class="text-[9px] text-gray-400 mb-2 font-bold">Instrucciones:</p>
                         <p class="text-[9px] text-gray-400 mb-4">El CSV debe tener: <br><b>Nombre, Costo, Precio, Stock, Categoria</b></p>
                         
-                        <!-- El botón ahora activa un input que está siempre presente en el DOM -->
+                        <select id="csv-encoding" class="w-full p-3 border-2 border-blue-200 rounded-xl text-xs mb-3 bg-gray-50 font-bold text-gray-600 outline-none focus:border-blue-500">
+                            <option value="UTF-8">Formato: UTF-8 (Excel Moderno / Normal)</option>
+                            <option value="ISO-8859-1">Formato: ANSI (Excel Antiguo / Muestra caracteres raros)</option>
+                        </select>
+
                         <button onclick="document.getElementById('csvFile').click()" class="w-full bg-blue-50 border-2 border-blue-200 text-blue-700 p-6 rounded-2xl font-black uppercase text-xs mb-3 flex flex-col items-center">
                             <i class="fas fa-file-csv text-3xl mb-2"></i>
                             Seleccionar Archivo
@@ -271,7 +296,6 @@
                 </div>`;
         }
 
-        // Listener para detectar cuando se elige un archivo
         document.addEventListener('change', (e) => {
             if (e.target.id === 'csvFile') {
                 const btn = document.getElementById('btn-import');
@@ -286,9 +310,28 @@
 
         function exp(t) {
             let c = (t === 'v') ? "Fecha,Cliente,Monto,Utilidad\n" : "Nombre,Costo,Precio,Stock,Categoria\n";
-            if (t === 'v') db.transacciones.forEach(x => c += `${x.f},${x.cli},${x.monto},${x.utilidad}\n`);
-            else db.productos.forEach(x => c += `${x.nombre},${x.costo},${x.precio},${x.stock},${x.cat}\n`);
-            const b = new Blob([c], { type: 'text/csv' }); const l = document.createElement('a'); l.href = URL.createObjectURL(b); l.download = (t === 'v' ? "ventas.csv" : "stock.csv"); l.click();
+            
+            if (t === 'v') {
+                db.transacciones.forEach(x => {
+                    let cli = String(x.cli).replace(/"/g, '""');
+                    if (cli.includes(',')) cli = `"${cli}"`;
+                    c += `${x.f},${cli},${x.monto},${x.utilidad}\n`;
+                });
+            } else {
+                db.productos.forEach(x => {
+                    let nom = String(x.nombre).replace(/"/g, '""');
+                    if (nom.includes(',')) nom = `"${nom}"`;
+                    let cat = String(x.cat).replace(/"/g, '""');
+                    if (cat.includes(',')) cat = `"${cat}"`;
+                    c += `${nom},${x.costo},${x.precio},${x.stock},${cat}\n`;
+                });
+            }
+            
+            const b = new Blob(["\uFEFF" + c], { type: 'text/csv;charset=utf-8;' }); 
+            const l = document.createElement('a'); 
+            l.href = URL.createObjectURL(b); 
+            l.download = (t === 'v' ? "ventas.csv" : "stock.csv"); 
+            l.click();
         }
 
         function imp() {
@@ -296,36 +339,47 @@
             const f = fileInput.files[0];
             if (!f) return alert("Selecciona un archivo primero");
             
+            const enc = document.getElementById('csv-encoding').value;
             const r = new FileReader();
+            
             r.onload = (e) => {
                 const text = e.target.result;
-                const lines = text.split(/\r?\n/); // Maneja saltos de línea de Windows y Linux
+                const lines = text.split(/\r?\n/);
                 let count = 0;
                 
+                // Análisis inteligente del separador (, o ;) según la primera fila
+                const firstLine = lines[0] || "";
+                const delimiter = (firstLine.split(';').length > firstLine.split(',').length) ? ';' : ',';
+                
                 lines.forEach((l, i) => {
-                    if (i === 0 || !l.trim()) return; // Ignorar cabecera y líneas vacías
-                    const d = l.split(',');
-                    if (d.length >= 3) { // Al menos nombre, costo y precio
+                    if (i === 0 || !l.trim()) return;
+                    
+                    // Regex dinámico que respeta comillas basado en el delimitador detectado
+                    const regex = new RegExp(`${delimiter}(?=(?:(?:[^"]*"){2})*[^"]*$)`);
+                    const d = l.split(regex).map(x => x.replace(/^"|"$/g, '').trim());
+                    
+                    if (d.length >= 3) {
                         db.productos.push({
-                            nombre: d[0].trim(),
+                            nombre: d[0] || 'Desconocido',
                             costo: parseFloat(d[1]) || 0,
                             precio: parseFloat(d[2]) || 0,
                             stock: parseInt(d[3]) || 0,
-                            cat: d[4] ? d[4].trim() : 'General'
+                            cat: d[4] ? d[4] : 'General'
                         });
                         count++;
                     }
                 });
                 
                 save();
-                alert(`¡Éxito! Se importaron ${count} productos.`);
+                alert(`¡Éxito! Se importaron ${count} productos correctamente usando la codificación ${enc}.`);
                 
-                // Limpiar input y UI
                 fileInput.value = ""; 
                 renderInventario(); 
             };
             r.onerror = () => alert("Error al leer el archivo.");
-            r.readAsText(f);
+            
+            // Leemos el archivo usando la codificación que elegiste en la interfaz
+            r.readAsText(f, enc); 
         }
 
         renderDashboard();
